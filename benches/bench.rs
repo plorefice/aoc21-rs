@@ -6,8 +6,8 @@ fn day06(c: &mut Criterion) {
         let input = day06::parse_input(include_str!("../inputs/day06.txt"));
 
         b.iter(|| {
-            day06::part_1(black_box(input));
-            day06::part_2(black_box(input));
+            day06::part_1(black_box(input.clone()));
+            day06::part_2(black_box(input.clone()));
         });
     });
 }

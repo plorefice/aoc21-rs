@@ -1,22 +1,26 @@
-pub fn parse_input(input: &str) -> [u64; 9] {
-    input
-        .split(',')
-        .map(str::parse::<usize>)
-        .fold([0; 9], |mut v, x| {
-            v[x.unwrap()] += 1;
-            v
-        })
+use std::collections::VecDeque;
+
+pub fn parse_input(input: &str) -> VecDeque<u64> {
+    VecDeque::from(
+        input
+            .split(',')
+            .map(str::parse::<usize>)
+            .fold([0; 9], |mut v, x| {
+                v[x.unwrap()] += 1;
+                v
+            }),
+    )
 }
 
-pub fn part_1(input: [u64; 9]) -> u64 {
+pub fn part_1(input: VecDeque<u64>) -> u64 {
     generate(input, 80)
 }
 
-pub fn part_2(input: [u64; 9]) -> u64 {
+pub fn part_2(input: VecDeque<u64>) -> u64 {
     generate(input, 256)
 }
 
-fn generate(mut input: [u64; 9], gens: usize) -> u64 {
+fn generate(mut input: VecDeque<u64>, gens: usize) -> u64 {
     for _ in 0..gens {
         let spawn = input[0];
         input.rotate_left(1);
