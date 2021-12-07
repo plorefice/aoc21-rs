@@ -1,7 +1,7 @@
 use aoc21_rs::{day06, day07};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-fn cumulative(c: &mut Criterion) {
+fn multipart(c: &mut Criterion) {
     c.bench_function("day 06", |b| {
         let input = day06::parse_input(include_str!("../inputs/day06.txt"));
 
@@ -21,5 +21,5 @@ fn cumulative(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, cumulative);
+criterion_group!(benches, multipart);
 criterion_main!(benches);
