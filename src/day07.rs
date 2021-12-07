@@ -21,16 +21,30 @@ fn solve<F>(input: &[i32], mut f: F) -> u32
 where
     F: FnMut(&i32, i32) -> i32,
 {
-    let min = *input.iter().min().unwrap();
-    let max = *input.iter().max().unwrap();
+    let mut a = *input.iter().min().unwrap();
+    let mut b = *input.iter().max().unwrap();
 
-    let mut best = u32::MAX;
-    for pos in min..=max {
-        let score = input.iter().map(|p| f(p, pos)).sum::<i32>() as u32;
-        best = u32::min(score, best);
+    // Bisection over the position range (the score is a parabola)
+    loop {
+        let pivot = (a + b) / 2;
+
+        // Memoization doesn't help here, too few steps for it to actually matter
+        let mid = input.iter().map(|p| f(p, pivot)).sum::<i32>() as u32;
+        let left = input.iter().map(|p| f(p, pivot - 1)).sum::<i32>() as u32;
+        let right = input.iter().map(|p| f(p, pivot + 1)).sum::<i32>() as u32;
+
+        // Local optimum == global optimum in a parabola
+        if left > mid && right > mid {
+            return mid;
+        }
+
+        // Update bounds
+        if left < mid {
+            b = pivot;
+        } else {
+            a = pivot;
+        }
     }
-
-    best
 }
 
 crate::solutions! {
