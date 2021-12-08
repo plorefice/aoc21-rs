@@ -3,6 +3,10 @@ edition = "2021"
 name = "aoc21-rs"
 version = "0.1.0"
 
+[dependencies]
+itertools = "0.10"
+lazy_static = "1.4"
+
 [dev-dependencies]
 criterion = "0.3"
 
