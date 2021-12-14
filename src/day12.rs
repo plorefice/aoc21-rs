@@ -62,14 +62,8 @@ fn solve(graph: &[(&str, &str)], allow_dupe: bool) -> usize {
 
 fn precompute_destinations<'a>(graph: &'a [(&'a str, &'a str)]) -> HashMap<&'a str, Vec<&'a str>> {
     graph.iter().fold(HashMap::new(), |mut map, &(k, v)| {
-        map.entry(k)
-            .and_modify(|dests| dests.push(v))
-            .or_insert_with(|| vec![v]);
-
-        map.entry(v)
-            .and_modify(|dests| dests.push(k))
-            .or_insert_with(|| vec![k]);
-
+        map.entry(k).or_default().push(v);
+        map.entry(v).or_default().push(k);
         map
     })
 }

@@ -37,11 +37,11 @@ pub fn parse_input(input: &str) -> Vec<(Point, Point)> {
 }
 
 pub fn part_1(input: &[(Point, Point)]) -> usize {
-    let mut map = HashMap::new();
+    let mut map = HashMap::<_, i32>::new();
 
     for (a, b) in input.iter().filter(|(a, b)| a.0 == b.0 || a.1 == b.1) {
         for pt in a.line_to(b) {
-            map.entry(pt).and_modify(|n| *n += 1).or_insert(1);
+            *map.entry(pt).or_default() += 1;
         }
     }
 
@@ -49,11 +49,11 @@ pub fn part_1(input: &[(Point, Point)]) -> usize {
 }
 
 pub fn part_2(input: &[(Point, Point)]) -> usize {
-    let mut map = HashMap::new();
+    let mut map = HashMap::<_, i32>::new();
 
     for (a, b) in input {
         for pt in a.line_to(b) {
-            map.entry(pt).and_modify(|n| *n += 1).or_insert(1);
+            *map.entry(pt).or_default() += 1;
         }
     }
 

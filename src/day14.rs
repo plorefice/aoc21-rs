@@ -13,12 +13,12 @@ pub fn parse_input(input: &str) -> (Pairs, Letters, Rules) {
         .bytes()
         .tuple_windows()
         .fold(HashMap::new(), |mut map, (a, b)| {
-            map.entry((a, b)).and_modify(|n| *n += 1).or_insert(1);
+            *map.entry((a, b)).or_default() += 1;
             map
         });
 
     let letters = template.bytes().fold(HashMap::new(), |mut map, c| {
-        map.entry(c).and_modify(|n| *n += 1).or_insert(1);
+        *map.entry(c).or_default() += 1;
         map
     });
 
@@ -51,10 +51,10 @@ pub fn solve((mut pairs, mut letters, rules): (Pairs, Letters, Rules), n: usize)
         for ((a, b), n) in pairs {
             let rule = rules[&(a, b)];
 
-            letters.entry(rule).and_modify(|x| *x += n).or_insert(n);
+            *letters.entry(rule).or_default() += n;
 
-            next.entry((a, rule)).and_modify(|x| *x += n).or_insert(n);
-            next.entry((rule, b)).and_modify(|x| *x += n).or_insert(n);
+            *next.entry((a, rule)).or_default() += n;
+            *next.entry((rule, b)).or_default() += n;
         }
 
         pairs = next;
