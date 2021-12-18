@@ -6,6 +6,7 @@ version = "0.1.0"
 [dependencies]
 itertools = "0.10"
 lazy_static = "1.4"
+nom = "7.1"
 
 [dev-dependencies]
 criterion = "0.3"
