@@ -1,129 +1,86 @@
-use std::{cell::RefCell, iter::Sum, ops::Add, rc::Rc};
+use std::{iter::Sum, ops::Add};
 
 use itertools::Itertools;
 
-#[derive(Debug)]
-pub enum Number {
-    Regular(Rc<RefCell<u64>>),
-    Pair(Box<Number>, Box<Number>),
-}
-
-#[derive(Debug)]
-pub struct Explosion {
-    target: (u64, u64),
-    left: Option<Rc<RefCell<u64>>>,
-    right: Option<Rc<RefCell<u64>>>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Number {
+    data: Vec<(u64, i32)>,
 }
 
 impl Number {
     pub fn magnitude(&self) -> u64 {
-        match self {
-            Number::Regular(n) => *n.borrow(),
-            Number::Pair(l, r) => 3 * l.magnitude() + 2 * r.magnitude(),
+        let mut stack = Vec::new();
+
+        for &n in &self.data {
+            stack.push(n);
+
+            // Coalesce the top of the stack
+            loop {
+                match (stack.pop(), stack.pop()) {
+                    (Some(last), None) => {
+                        stack.push(last);
+                        break;
+                    }
+                    (Some(r), Some(l)) => {
+                        if r.1 == l.1 {
+                            stack.push((3 * l.0 + 2 * r.0, r.1 - 1));
+                        } else {
+                            stack.push(l);
+                            stack.push(r);
+                            break;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
         }
+
+        stack.pop().unwrap().0
     }
 
     fn reduce(&mut self) {
         // Keep going until self either can be exploded (first) or split (second)
-        while self.explode() || self.split() {}
+        while self.explode().is_some() || self.split().is_some() {}
     }
 
-    fn explode(&mut self) -> bool {
-        if let Some(explosion) = self.find_explosion(0) {
-            if let Some(left) = explosion.left {
-                *left.borrow_mut() += explosion.target.0;
-            }
-            if let Some(right) = explosion.right {
-                *right.borrow_mut() += explosion.target.1;
-            }
-            true
-        } else {
-            false
+    fn explode(&mut self) -> Option<()> {
+        let (i, &(_, depth)) = self.data.iter().find_position(|(_, depth)| *depth >= 4)?;
+
+        if i > 0 {
+            self.data[i - 1].0 += self.data[i].0;
         }
+        if i < self.data.len() - 2 {
+            self.data[i + 2].0 += self.data[i + 1].0;
+        }
+
+        self.data.splice(i..i + 2, [(0, depth - 1)]);
+
+        Some(())
     }
 
-    fn split(&mut self) -> bool {
-        match self {
-            Number::Regular(x) if *x.borrow() >= 10 => {
-                let x = *x.borrow();
+    fn split(&mut self) -> Option<()> {
+        let (i, &(num, depth)) = self.data.iter().find_position(|(n, _)| *n >= 10)?;
 
-                *self = Number::Pair(
-                    Box::new(Number::Regular(Rc::new(RefCell::new(x / 2)))),
-                    Box::new(Number::Regular(Rc::new(RefCell::new((x + 1) / 2)))),
-                );
-                true
-            }
-            Number::Regular(_) => false,
-            Number::Pair(l, r) => l.split() || r.split(),
-        }
-    }
+        self.data
+            .splice(i..i + 1, [(num / 2, depth + 1), ((num + 1) / 2, depth + 1)]);
 
-    fn find_explosion(&mut self, nest: usize) -> Option<Explosion> {
-        match (&mut *self, nest) {
-            (Number::Regular(_), _) => None,
-            (Number::Pair(a, b), 4) => {
-                let res = Some(Explosion {
-                    target: match (&**a, &**b) {
-                        (Number::Regular(a), Number::Regular(b)) => (*a.borrow(), *b.borrow()),
-                        _ => unreachable!(),
-                    },
-                    left: None,
-                    right: None,
-                });
-
-                *self = Number::Regular(Rc::default());
-                res
-            }
-            (Number::Pair(sl, sr), _) => match sl.find_explosion(nest + 1) {
-                Some(mut explosion) => {
-                    if explosion.right.is_none() {
-                        explosion.right = sr.find_regular_right();
-                    }
-                    Some(explosion)
-                }
-                None => {
-                    if let Some(mut explosion) = sr.find_explosion(nest + 1) {
-                        if explosion.left.is_none() {
-                            explosion.left = sl.find_regular_left();
-                        }
-                        Some(explosion)
-                    } else {
-                        None
-                    }
-                }
-            },
-        }
-    }
-
-    fn find_regular_left(&self) -> Option<Rc<RefCell<u64>>> {
-        match self {
-            Number::Regular(l) => Some(l.clone()),
-            Number::Pair(l, r) => r.find_regular_left().or_else(|| l.find_regular_left()),
-        }
-    }
-
-    fn find_regular_right(&self) -> Option<Rc<RefCell<u64>>> {
-        match self {
-            Number::Regular(l) => Some(l.clone()),
-            Number::Pair(l, r) => l.find_regular_right().or_else(|| r.find_regular_right()),
-        }
-    }
-
-    pub fn deep_clone(&self) -> Number {
-        match self {
-            Number::Regular(r) => Number::Regular(Rc::new(RefCell::new(*r.borrow()))),
-            Number::Pair(a, b) => Number::Pair(Box::new(a.deep_clone()), Box::new(b.deep_clone())),
-        }
+        Some(())
     }
 }
 
 impl Add for Number {
     type Output = Self;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        let mut res = Number::Pair(Box::new(self), Box::new(rhs));
-        res.reduce();
-        res
+    fn add(mut self, rhs: Self) -> Self::Output {
+        for (_, d) in &mut self.data {
+            *d += 1;
+        }
+        for (n, d) in rhs.data {
+            self.data.push((n, d + 1));
+        }
+
+        self.reduce();
+        self
     }
 }
 
@@ -140,7 +97,21 @@ impl Sum for Number {
 pub fn parse_input(input: &str) -> Vec<Number> {
     input
         .lines()
-        .map(|line| parse::number(line).unwrap().1)
+        .map(|line| {
+            let mut data = Vec::new();
+            let mut depth = -1;
+
+            for c in line.chars() {
+                match c {
+                    '[' => depth += 1,
+                    ']' => depth -= 1,
+                    ',' => (),
+                    _ => data.push((c.to_digit(10).unwrap() as u64, depth)),
+                }
+            }
+
+            Number { data }
+        })
         .collect()
 }
 
@@ -152,7 +123,7 @@ pub fn part_2(numbers: Vec<Number>) -> u64 {
     numbers
         .iter()
         .permutations(2)
-        .map(|nums| (nums[0].deep_clone() + nums[1].deep_clone()).magnitude())
+        .map(|nums| (nums[0].clone() + nums[1].clone()).magnitude())
         .max()
         .unwrap()
 }
@@ -165,40 +136,5 @@ crate::solutions! {
     p2=> {
         part_2(parse_input(include_str!("../inputs/day18.txt"))),
         4770
-    }
-}
-
-mod parse {
-    use std::{cell::RefCell, rc::Rc};
-
-    use nom::{
-        branch::alt,
-        bytes::complete::{tag, take_while},
-        combinator::map_res,
-        AsChar, IResult,
-    };
-
-    use crate::day18::Number;
-
-    pub fn number(input: &str) -> IResult<&str, Number> {
-        let (input, number) = alt((regular, pair))(input)?;
-        Ok((input, number))
-    }
-
-    fn regular(input: &str) -> IResult<&str, Number> {
-        map_res(take_while(|c: char| c.is_dec_digit()), |s: &str| {
-            s.parse::<u64>()
-                .map(|x| Number::Regular(Rc::new(RefCell::new(x))))
-        })(input)
-    }
-
-    fn pair(input: &str) -> IResult<&str, Number> {
-        let (input, _) = tag("[")(input)?;
-        let (input, left) = alt((regular, pair))(input)?;
-        let (input, _) = tag(",")(input)?;
-        let (input, right) = alt((regular, pair))(input)?;
-        let (input, _) = tag("]")(input)?;
-
-        Ok((input, Number::Pair(Box::new(left), Box::new(right))))
     }
 }
