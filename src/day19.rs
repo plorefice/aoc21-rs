@@ -106,9 +106,7 @@ fn solve(mut input: Vec<Vec<Coord>>) -> (usize, Vec<Coord>) {
             }
         }
 
-        if let Some(i) = found {
-            discovered.push(i);
-        }
+        discovered.push(found.unwrap());
     }
 
     (probes.len(), offsets)
