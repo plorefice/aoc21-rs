@@ -1,20 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, mem::swap};
 
 use itertools::Itertools;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct DeterministicDie {
-    value: u32,
-    rolls: u32,
-}
-
-impl DeterministicDie {
-    pub fn roll(&mut self) -> u32 {
-        let res = self.value + 1;
-        self.value = res % 100;
-        self.rolls += 1;
-        res
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Universe {
+    positions: (u32, u32),
+    scores: (u32, u32),
 }
 
 pub fn parse_input(input: &str) -> (u32, u32) {
@@ -25,111 +16,84 @@ pub fn parse_input(input: &str) -> (u32, u32) {
         .unwrap()
 }
 
-pub fn part_1((mut p1, mut p2): (u32, u32)) -> u32 {
-    let mut scores = (0, 0);
-    let mut p1_turn = true;
-
-    let mut die = DeterministicDie::default();
-
-    while scores.0 < 1000 && scores.1 < 1000 {
-        let roll = die.roll() + die.roll() + die.roll();
-
-        let (pos, score) = if p1_turn {
-            (&mut p1, &mut scores.0)
-        } else {
-            (&mut p2, &mut scores.1)
-        };
-
-        *pos += roll;
-        while *pos > 10 {
-            *pos -= 10;
-        }
-        *score += *pos;
-
-        p1_turn = !p1_turn;
-    }
-
-    scores.0.min(scores.1) * die.rolls
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Universe {
-    positions: (u32, u32),
-    scores: (u32, u32),
-
-    p1_turn: bool,
-    rolls: [u8; 3],
+pub fn part_1(input: (u32, u32)) -> u32 {
+    deterministic_game(input)
 }
 
 pub fn part_2(positions: (u32, u32)) -> u64 {
-    let origin = Universe {
-        positions,
-        scores: (0, 0),
-        p1_turn: true,
-        rolls: [0, 0, 0],
-    };
+    let score = dirac_game(
+        &mut HashMap::new(),
+        Universe {
+            positions,
+            scores: (0, 0),
+        },
+    );
 
-    let mut visited = HashMap::new();
-
-    let final_score = play(&mut visited, origin);
-
-    final_score.0.max(final_score.1)
+    score.0.max(score.1)
 }
 
-fn play(visited: &mut HashMap<Universe, (u64, u64)>, mut universe: Universe) -> (u64, u64) {
+fn deterministic_game((mut p1, mut p2): (u32, u32)) -> u32 {
+    let mut scores = (0, 0);
+    let mut rolls = 0;
+    let mut die = 0;
+
+    while scores.1 < 1000 {
+        for _ in 0..3 {
+            p1 += die + 1;
+            die = (die + 1) % 100;
+        }
+        rolls += 3;
+
+        while p1 > 10 {
+            p1 -= 10;
+        }
+        scores.0 += p1;
+
+        swap(&mut p1, &mut p2);
+        swap(&mut scores.0, &mut scores.1);
+    }
+
+    scores.0 * rolls
+}
+
+fn dirac_game(cache: &mut HashMap<Universe, (u64, u64)>, universe: Universe) -> (u64, u64) {
+    let Universe { positions, scores } = universe;
+
+    // Exit condition
+    if scores.1 >= 21 {
+        return (0, 1);
+    }
+
     // If we have already visited this universe, we already know the tally
-    if let Some(&wins) = visited.get(&universe) {
+    if let Some(&wins) = cache.get(&universe) {
         return wins;
     }
 
-    // Resolve score if the die was rolled three times
-    if universe.rolls.iter().all(|r| *r != 0) {
-        let (pos, score) = if universe.p1_turn {
-            (&mut universe.positions.0, &mut universe.scores.0)
-        } else {
-            (&mut universe.positions.1, &mut universe.scores.1)
-        };
-
-        *pos += universe.rolls.iter().sum::<u8>() as u32;
-        while *pos > 10 {
-            *pos -= 10;
-        }
-        *score += *pos;
-
-        if universe.scores.0 >= 21 {
-            return (1, 0);
-        } else if universe.scores.1 >= 21 {
-            return (0, 1);
-        } else {
-            // Reset universe die and change turn
-            universe.rolls = [0, 0, 0];
-            universe.p1_turn = !universe.p1_turn;
-        }
-    }
-
-    // If we get here, no player won in this round, so we need to simulate more universes
     let mut wins = (0, 0);
 
-    // TODO: probably could use a SmallVec and avoid this linear search
-    let idx = universe.rolls.iter().find_position(|&&r| r == 0).unwrap().0;
+    // Iterate over all possible sums resulting from throwing 3d3s
+    for roll in [
+        3, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 9,
+    ] {
+        let mut pos = positions.0 + roll;
+        if pos > 10 {
+            pos -= 10;
+        }
 
-    // Throw the dice and simulate the next 3 universes
-    for roll in 1..=3 {
-        let new_universe = Universe {
-            rolls: {
-                let mut rolls = universe.rolls;
-                rolls[idx] = roll;
-                rolls
+        // By swapping positions we can iterate on P1 only, saving us some headaches
+        let new_wins = dirac_game(
+            cache,
+            Universe {
+                positions: (positions.1, pos),
+                scores: (scores.1, scores.0 + pos),
             },
-            ..universe
-        };
+        );
 
-        let new_wins = play(visited, new_universe);
-        wins.0 += new_wins.0;
-        wins.1 += new_wins.1;
+        wins.0 += new_wins.1;
+        wins.1 += new_wins.0;
     }
 
-    visited.insert(universe, wins);
+    cache.insert(universe, wins);
 
     wins
 }
