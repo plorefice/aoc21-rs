@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::swap};
+use std::mem::swap;
 
 use itertools::Itertools;
 
@@ -6,6 +6,13 @@ use itertools::Itertools;
 pub struct Universe {
     positions: (u32, u32),
     scores: (u32, u32),
+}
+
+impl Universe {
+    pub fn id(&self) -> usize {
+        (self.positions.0 << 14 | self.positions.1 << 10 | self.scores.0 << 5 | self.scores.1)
+            as usize
+    }
 }
 
 pub fn parse_input(input: &str) -> (u32, u32) {
@@ -22,7 +29,7 @@ pub fn part_1(input: (u32, u32)) -> u32 {
 
 pub fn part_2(positions: (u32, u32)) -> u64 {
     let score = dirac_game(
-        &mut HashMap::new(),
+        &mut vec![None; 1 << 18], // max id
         Universe {
             positions,
             scores: (0, 0),
@@ -56,7 +63,7 @@ fn deterministic_game((mut p1, mut p2): (u32, u32)) -> u32 {
     scores.0 * rolls
 }
 
-fn dirac_game(cache: &mut HashMap<Universe, (u64, u64)>, universe: Universe) -> (u64, u64) {
+fn dirac_game(cache: &mut Vec<Option<(u64, u64)>>, universe: Universe) -> (u64, u64) {
     let Universe { positions, scores } = universe;
 
     // Exit condition
@@ -65,7 +72,7 @@ fn dirac_game(cache: &mut HashMap<Universe, (u64, u64)>, universe: Universe) -> 
     }
 
     // If we have already visited this universe, we already know the tally
-    if let Some(&wins) = cache.get(&universe) {
+    if let Some(wins) = cache[universe.id()] {
         return wins;
     }
 
@@ -93,7 +100,7 @@ fn dirac_game(cache: &mut HashMap<Universe, (u64, u64)>, universe: Universe) -> 
         wins.1 += new_wins.0;
     }
 
-    cache.insert(universe, wins);
+    cache[universe.id()] = Some(wins);
 
     wins
 }
