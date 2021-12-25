@@ -5,6 +5,8 @@ use std::{
     mem::swap,
 };
 
+use itertools::Itertools;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Spot {
     Hallway(usize),
@@ -18,37 +20,37 @@ pub struct Move {
     to: Spot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Map {
-    rooms: [[Option<u8>; 2]; 4],
+    rooms: [Vec<Option<u8>>; 4],
     hallway: [Option<u8>; 11],
 }
 
 impl Map {
     pub fn organized(&self) -> bool {
-        self.rooms[0] == [Some(0), Some(0)]
-            && self.rooms[1] == [Some(1), Some(1)]
-            && self.rooms[2] == [Some(2), Some(2)]
-            && self.rooms[3] == [Some(3), Some(3)]
+        self.rooms
+            .iter()
+            .enumerate()
+            .all(|(amph, room)| room.iter().all(|&spot| spot == Some(amph as u8)))
     }
 
     pub fn available_moves(&self) -> Vec<Move> {
         let mut moves = Vec::new();
 
         // Moves from hallway to room
-        for (i, amph) in self
+        for (hall, amph) in self
             .hallway
             .iter()
             .enumerate()
             .filter_map(|(i, x)| x.map(|x| (i, x)))
         {
-            let room = amph as usize;
-            let room_x = (room + 1) * 2;
+            let room = &self.rooms[amph as usize];
+            let room_x = (amph as usize + 1) * 2;
 
-            let range = if i < room_x {
-                i + 1..=room_x
+            let range = if hall < room_x {
+                hall + 1..=room_x
             } else {
-                room_x..=i - 1
+                room_x..=hall - 1
             };
 
             // Can't move to a room if the hallway is occupied
@@ -56,59 +58,45 @@ impl Map {
                 continue;
             }
 
-            if self.rooms[room] == [None, None] {
-                moves.push(Move {
-                    who: amph,
-                    from: Spot::Hallway(i),
-                    to: Spot::Room(room, 1),
-                })
-            }
-            if self.rooms[room] == [None, Some(amph)] {
-                moves.push(Move {
-                    who: amph,
-                    from: Spot::Hallway(i),
-                    to: Spot::Room(room, 0),
-                })
+            // Find a free spot
+            if let Some((spot, _)) = room.iter().rev().find_position(|&&r| r == None) {
+                let spot = room.len() - spot - 1;
+
+                // Do not move into a room unless the rest of the room is already organized
+                if room[spot + 1..].iter().all(|&r| r == Some(amph)) {
+                    moves.push(Move {
+                        who: amph,
+                        from: Spot::Hallway(hall),
+                        to: Spot::Room(amph as usize, spot),
+                    })
+                }
             }
         }
 
         // Moves from room to hallway
-        for (i, &[front, back]) in self.rooms.iter().enumerate() {
-            match (front, back) {
-                (Some(a), Some(b)) if a == b && a == i as u8 => {
-                    // Room is organized: do not scramble it
-                }
-                (Some(a), _) => {
+        for (amph, room) in self.rooms.iter().enumerate() {
+            if room.iter().all(|&r| r == Some(amph as u8)) {
+                continue;
+            }
+
+            // Find the first occupied spot
+            if let Some((place, Some(other))) = room.iter().find_position(|r| r.is_some()) {
+                // Do not mess up a room if the rest of the room is organized
+                if !room[place..].iter().all(|&r| r == Some(amph as u8)) {
                     for spot in [0, 1, 3, 5, 7, 9, 10] {
                         if self.hallway[spot].is_none()
-                            && !self.hallway[spot.min((i + 1) * 2)..=spot.max((i + 1) * 2)]
+                            && !self.hallway[spot.min((amph + 1) * 2)..=spot.max((amph + 1) * 2)]
                                 .iter()
                                 .any(|x| x.is_some())
                         {
                             moves.push(Move {
-                                who: a,
-                                from: Spot::Room(i, 0),
+                                who: *other,
+                                from: Spot::Room(amph, place),
                                 to: Spot::Hallway(spot),
                             })
                         }
                     }
                 }
-                (None, Some(b)) if b != i as u8 => {
-                    for spot in [0, 1, 3, 5, 7, 9, 10] {
-                        if self.hallway[spot].is_none()
-                            && !self.hallway[spot.min((i + 1) * 2)..=spot.max((i + 1) * 2)]
-                                .iter()
-                                .any(|x| x.is_some())
-                        {
-                            moves.push(Move {
-                                who: b,
-                                from: Spot::Room(i, 1),
-                                to: Spot::Hallway(spot),
-                            })
-                        }
-                    }
-                }
-                (None, None) | (None, Some(_)) => (),
             }
         }
 
@@ -157,16 +145,33 @@ pub fn parse_input(input: &str) -> Map {
 
     Map {
         rooms: [
-            [Some(front[3] - b'A'), Some(back[3] - b'A')],
-            [Some(front[5] - b'A'), Some(back[5] - b'A')],
-            [Some(front[7] - b'A'), Some(back[7] - b'A')],
-            [Some(front[9] - b'A'), Some(back[9] - b'A')],
+            vec![Some(front[3] - b'A'), Some(back[3] - b'A')],
+            vec![Some(front[5] - b'A'), Some(back[5] - b'A')],
+            vec![Some(front[7] - b'A'), Some(back[7] - b'A')],
+            vec![Some(front[9] - b'A'), Some(back[9] - b'A')],
         ],
         hallway: [None; 11],
     }
 }
 
 pub fn part_1(map: Map) -> usize {
+    solve(map)
+}
+
+pub fn part_2(mut map: Map) -> usize {
+    map.rooms[0].insert(1, Some(3));
+    map.rooms[0].insert(2, Some(3));
+    map.rooms[1].insert(1, Some(2));
+    map.rooms[1].insert(2, Some(1));
+    map.rooms[2].insert(1, Some(1));
+    map.rooms[2].insert(2, Some(0));
+    map.rooms[3].insert(1, Some(0));
+    map.rooms[3].insert(2, Some(2));
+
+    solve(map)
+}
+
+fn solve(map: Map) -> usize {
     let mut configurations = BinaryHeap::new();
     let mut seen = HashSet::new();
 
@@ -203,5 +208,9 @@ crate::solutions! {
     p1 => {
         part_1(parse_input(include_str!("../inputs/day23.txt"))),
         18051
+    },
+    p2 => {
+        part_2(parse_input(include_str!("../inputs/day23.txt"))),
+        50245
     }
 }
